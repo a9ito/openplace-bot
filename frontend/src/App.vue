@@ -7,6 +7,7 @@
 
     const canvas = useTemplateRef('canvas');
     const settings = ref({
+        baseUrl: 'http://localhost',
         tileX: null,
         tileY: null,
         pX: null,
@@ -26,7 +27,6 @@
     const running = ref(false);
     const stopping = ref(false);
     const userTableKey = ref(Date.now());
-    const baseUrl = ref(null);
     const remainingPixels = ref(0);
     const totalPixels = ref(0);
 
@@ -39,8 +39,8 @@
     }
 
     function url(path) {
-        if (!baseUrl.value) throw new Error('Base URL is not set.');
-        return baseUrl.value.replace(/\/$/, '') + '/' + path.replace(/^\//, '');
+        if (!settings.value.baseUrl) throw new Error('Base URL is not set.');
+        return settings.value.baseUrl.replace(/\/$/, '') + '/' + path.replace(/^\//, '');
     }
 
     async function selectImage() {
@@ -183,15 +183,32 @@
             const data = await ReadSettings();
             if (!data) return;
 
-            settings.value = JSON.parse(data);
+            settings.value = Object.assign(settings.value, JSON.parse(data));
         } catch (error) {
             log('Failed to read settings: ' + error);
+        }
+    }
+
+    async function isBottingAllowed() {
+        try {
+            const response = await Request({ method: 'GET', url: url('/checkrobots') });
+            const raw = atob(response.data);
+            const data = JSON.parse(raw);
+            return data.isBottingAllowed;
+        } catch (error) {
+            return false;
         }
     }
 
     async function start() {
         running.value = true;
         stopping.value = false;
+
+        const isValid = await isBottingAllowed();
+        if (!isValid) {
+            alert('Botting is not allowed on this instance.', undefined, 'error');
+            stopping.value = true;
+        }
 
         while (!stopping.value) {
             try {
@@ -529,20 +546,6 @@
         }
     }
 
-    async function readInstanceBaseUrl() {
-        const buffer = await ReadFile('instance.txt');
-        const raw = atob(buffer);
-        const baseUrl = raw.trim();
-
-        const url = new URL(baseUrl);
-        if (url.host === 'openplace.live') {
-            alert('Botting is not allowed on openplace.live.', undefined, 'error');
-            throw new Error('Botting is not allowed on openplace.live.');
-        }
-
-        return baseUrl;
-    }
-
     async function migrateUsers() {
         const filename = await SelectFile([{ pattern: 'settings.json', name: 'Settings' }]);
         if (!filename) return;
@@ -568,13 +571,6 @@
 
     onMounted(async () => {
         loading.value = true;
-
-        try {
-            baseUrl.value = await readInstanceBaseUrl();
-        } catch (error) {
-            console.error(error);
-            baseUrl.value = 'http://localhost';
-        }
 
         try {
             await readSettings();
@@ -698,7 +694,7 @@
                         <div class="d-flex align-items-center gap-2 mb-2">
                             <i class="fa-solid fa-earth-asia"></i>
                             <div>
-                                Instance: <a href="#" @click="openURL(baseUrl)">{{ baseUrl }}</a>
+                                Instance: <a href="#" @click="openURL(settings.baseUrl)">{{ settings.baseUrl }}</a>
                             </div>
                         </div>
 
