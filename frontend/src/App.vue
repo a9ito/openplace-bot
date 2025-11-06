@@ -404,7 +404,8 @@
                             }
                         }
 
-                        let charges = getCharges(user);
+                        // let charges = getCharges(user);
+                        let charges = 5000;
                         if (charges <= 0) continue;
 
                         const pixels = [];
@@ -647,13 +648,6 @@
                     </div>
 
                     <div class="form-group mt-auto">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <i class="fa-solid fa-earth-asia"></i>
-                            <div>
-                                Instance: <a href="#" @click="openURL(settings.baseUrl)">{{ settings.baseUrl }}</a>
-                            </div>
-                        </div>
-
                         <button v-if="!running" type="button" class="btn btn-primary w-100" :disabled="loading || running" @click="start">
                             <i class="fa-solid fa-play"></i>
                             Start
