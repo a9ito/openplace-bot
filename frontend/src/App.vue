@@ -1,20 +1,16 @@
 <script setup>
-    import { chain, flatMap, sumBy } from 'lodash';
+    import { chain, sumBy } from 'lodash';
     import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue';
-    import { SelectFile, ReadFile, Request, WriteSettings, ReadSettings, OpenURL } from '../wailsjs/go/main/App';
+    import { SelectFile, ReadFile, Request, WriteSettings, ReadSettings, OpenURL, Paint } from '../wailsjs/go/main/App';
     import { alert, generateId, imageDataFromBuffer, input, isUnsignedInteger, numberFormat, randomstring, sleep } from './helpers';
-    import { similarColor, dithering, convert, palette } from './palette';
 
     const canvas = useTemplateRef('canvas');
     const settings = ref({
-        baseUrl: 'http://localhost',
         tileX: null,
         tileY: null,
         pX: null,
         pY: null,
         image: null,
-        dithering: false,
-        usePremiumColors: false,
         buyCharges: false,
         buyMaxCharges: 0,
         sleep: 60,
@@ -39,8 +35,7 @@
     }
 
     function url(path) {
-        if (!settings.value.baseUrl) throw new Error('Base URL is not set.');
-        return settings.value.baseUrl.replace(/\/$/, '') + '/' + path.replace(/^\//, '');
+        return 'https://place34.com/' + path.replace(/^\//, '');
     }
 
     async function selectImage() {
@@ -59,20 +54,28 @@
         const buffer = await ReadFile(settings.value.image);
         const bytes = Uint8Array.from(atob(buffer), (c) => c.charCodeAt(0));
 
-        let imageData = await imageDataFromBuffer(bytes);
-        if (settings.value.dithering) {
-            imageData = dithering(imageData, settings.value.usePremiumColors);
-        } else {
-            imageData = convert(imageData, settings.value.usePremiumColors);
-        }
-
+        const imageData = await imageDataFromBuffer(bytes);
         canvas.value.width = imageData.width;
         canvas.value.height = imageData.height;
 
         const ctx = canvas.value.getContext('2d');
         ctx.putImageData(imageData, 0, 0);
 
-        totalPixels.value = imageData.width * imageData.height;
+        totalPixels.value = 0;
+        for (let y = 0; y < imageData.height; y++) {
+            for (let x = 0; x < imageData.width; x++) {
+                const color = {
+                    r: imageData.data[y * imageData.width * 4 + x * 4 + 0],
+                    g: imageData.data[y * imageData.width * 4 + x * 4 + 1],
+                    b: imageData.data[y * imageData.width * 4 + x * 4 + 2],
+                    a: imageData.data[y * imageData.width * 4 + x * 4 + 3],
+                };
+                if (color.a === 0) continue;
+
+                totalPixels.value += 1;
+            }
+        }
+
         remainingPixels.value = totalPixels.value;
     }
 
@@ -134,8 +137,11 @@
     async function login(user) {
         const response = await Request({
             method: 'POST',
-            url: url('/login'),
+            url: url('/api/login'),
             data: JSON.stringify({ username: user.username, password: user.password }),
+            headers: {
+                'Content-Type': 'application/json',
+            },
         });
         const raw = atob(response.data);
 
@@ -147,7 +153,7 @@
     }
 
     async function fetchMe(user) {
-        const response = await Request({ method: 'GET', url: url('/me'), cookie: user.cookie });
+        const response = await Request({ method: 'GET', url: url('/api/me'), cookie: user.cookie });
         const raw = atob(response.data);
 
         if (response.status !== 200) {
@@ -189,26 +195,9 @@
         }
     }
 
-    async function isBottingAllowed() {
-        try {
-            const response = await Request({ method: 'GET', url: url('/checkrobots') });
-            const raw = atob(response.data);
-            const data = JSON.parse(raw);
-            return data.isBottingAllowed;
-        } catch (error) {
-            return false;
-        }
-    }
-
     async function start() {
         running.value = true;
         stopping.value = false;
-
-        const isValid = await isBottingAllowed();
-        if (!isValid) {
-            alert('Botting is not allowed on this instance.', undefined, 'error');
-            stopping.value = true;
-        }
 
         while (!stopping.value) {
             try {
@@ -265,14 +254,13 @@
             for (let x = 0; x < canvas.value.width; x++) {
                 if (stopping.value) break;
 
-                const imageColor = {
+                const color = {
                     r: imageData.data[y * canvas.value.width * 4 + x * 4 + 0],
                     g: imageData.data[y * canvas.value.width * 4 + x * 4 + 1],
                     b: imageData.data[y * canvas.value.width * 4 + x * 4 + 2],
                     a: imageData.data[y * canvas.value.width * 4 + x * 4 + 3],
                 };
-                const imagePaletteColor = similarColor(imageColor, settings.value.usePremiumColors);
-                if (imagePaletteColor.idx === 0) continue;
+                if (color.a === 0) continue;
 
                 const coords = {
                     tx: Math.floor(parseInt(settings.value.tileX) + (parseInt(settings.value.pX) + x) / 1000),
@@ -284,7 +272,7 @@
                 const tileKey = `${coords.tx}-${coords.ty}`;
                 if (!tileMap.has(tileKey)) {
                     log(`Getting tile ${coords.tx} ${coords.ty}...`);
-                    var response = await Request({ method: 'GET', url: url(`/files/s0/tiles/${coords.tx}/${coords.ty}.png`) });
+                    var response = await Request({ method: 'GET', url: url(`/api/tile/${coords.tx}/${coords.ty}.png`) });
                     var raw = atob(response.data);
                     if (response.status !== 200) {
                         throw new Error(`Failed to get tile with status ${response.status}. Response: ${raw}`);
@@ -302,15 +290,14 @@
                     b: tileData.data[coords.py * tileData.width * 4 + coords.px * 4 + 2],
                     a: tileData.data[coords.py * tileData.width * 4 + coords.px * 4 + 3],
                 };
-                const existPaletteColor = similarColor(existColor, true);
-                if (existPaletteColor.idx === imagePaletteColor.idx) continue;
+                if (existColor.r === color.r && existColor.g === color.g && existColor.b === color.b && existColor.a === color.a) continue;
 
                 pixelQueue.push({
                     tx: coords.tx,
                     ty: coords.ty,
                     px: coords.px,
                     py: coords.py,
-                    colorIdx: imagePaletteColor.idx,
+                    color: color,
                 });
             }
         }
@@ -324,24 +311,6 @@
             requestStop();
             return;
         }
-
-        const colorCountMap = new Map();
-        for (const pixel of pixelQueue) {
-            let count = colorCountMap.get(pixel.colorIdx) || 0;
-            colorCountMap.set(pixel.colorIdx, count + 1);
-        }
-
-        const lockedColors = Array.from(colorCountMap.entries())
-            .filter(([idx, count]) => count > 0)
-            .map(([idx, count]) => {
-                return {
-                    color: palette.find((c) => c.idx === idx),
-                    count,
-                };
-            })
-            .filter((item) => item.color.isPremium)
-            .toSorted((a, b) => b.count - a.count)
-            .map((item) => item.color);
 
         const promises = [];
         let userCount = settings.value.users.length;
@@ -450,7 +419,6 @@
                             pixelQueueIndex += 1;
 
                             if (!pixel) continue;
-                            if (!hasColor(user, pixel.colorIdx)) continue;
 
                             pixels.push(pixel);
                             charges -= 1;
@@ -462,15 +430,18 @@
                             .groupBy((pixel) => `${pixel.tx}-${pixel.ty}`)
                             .values();
                         for (const tilePixels of pixelsByTile) {
-                            var response = await Request({
+                            const payload = chain(tilePixels)
+                                .map((pixel) => [pixel.px, pixel.py, pixel.color.r, pixel.color.g, pixel.color.b, pixel.color.a])
+                                .value();
+
+                            var response = await Paint({
                                 method: 'POST',
-                                url: url(`/s0/pixel/${tilePixels[0].tx}/${tilePixels[0].ty}`),
-                                data: JSON.stringify({
-                                    colors: flatMap(tilePixels, (pixel) => pixel.colorIdx),
-                                    coords: flatMap(tilePixels, (pixel) => [pixel.px, pixel.py]),
-                                    t: 'skip',
-                                }),
+                                url: url(`/api/paint/${tilePixels[0].tx}/${tilePixels[0].ty}`),
+                                data: JSON.stringify(payload),
                                 cookie: user.cookie,
+                                headers: {
+                                    'Content-Type': 'application/octet-stream',
+                                },
                             });
                             var raw = atob(response.data);
 
@@ -635,21 +606,6 @@
                                 <i class="fa-solid fa-image"></i>
                                 Select image
                             </button>
-                        </div>
-                    </div>
-                    <div class="col-2 text-end align-self-start">
-                        <label for="tileX">Options</label>
-                    </div>
-                    <div class="col-10">
-                        <div class="d-flex flex-column">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="dithering" v-model="settings.dithering" :disabled="loading" @change="doDithering" />
-                                <label class="form-check-label" for="dithering">Dithering</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="usePremiumColors" v-model="settings.usePremiumColors" :disabled="loading" @change="doTogglePremiumColors" />
-                                <label class="form-check-label" for="usePremiumColors">Use premium colors</label>
-                            </div>
                         </div>
                     </div>
                 </div>

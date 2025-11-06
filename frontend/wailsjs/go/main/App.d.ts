@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function OpenURL(arg1:string):Promise<void>;
 
+export function Paint(arg1:main.RequestData):Promise<main.ResponseData>;
+
 export function ReadFile(arg1:string):Promise<Array<number>>;
 
 export function ReadSettings():Promise<any>;

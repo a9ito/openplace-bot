@@ -19,6 +19,7 @@ export namespace main {
 	    url: string;
 	    data: string;
 	    cookie: string;
+	    headers: Record<string, string>;
 	
 	    static createFrom(source: any = {}) {
 	        return new RequestData(source);
@@ -30,6 +31,7 @@ export namespace main {
 	        this.url = source["url"];
 	        this.data = source["data"];
 	        this.cookie = source["cookie"];
+	        this.headers = source["headers"];
 	    }
 	}
 	export class ResponseData {
