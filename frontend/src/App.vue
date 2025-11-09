@@ -6,6 +6,7 @@
 
     const canvas = useTemplateRef('canvas');
     const settings = ref({
+        baseUrl: 'https://place34.com',
         tileX: null,
         tileY: null,
         pX: null,
@@ -35,7 +36,7 @@
     }
 
     function url(path) {
-        return 'https://place34.com/' + path.replace(/^\//, '');
+        return settings.value.baseUrl.replace(/\/$/, '') + '/' + path.replace(/^\//, '');
     }
 
     async function selectImage() {
