@@ -405,8 +405,7 @@
                             }
                         }
 
-                        // let charges = getCharges(user);
-                        let charges = 5000;
+                        let charges = getCharges(user);
                         if (charges <= 0) continue;
 
                         const pixels = [];
