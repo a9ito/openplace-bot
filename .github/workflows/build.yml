@@ -2,9 +2,9 @@ name: Build Wails App
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ place34 ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ place34 ]
   release:
     types: [ created ]
 
