@@ -1,0 +1,83 @@
+name: Build macOS App
+
+on:
+  push:
+    branches: 
+      - main
+      - master
+      - place34
+  pull_request:
+    branches: 
+      - main
+      - master
+      - place34
+  release:
+    types: [ created ]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      
+      - name: Run Wails Doctor
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          wails doctor
+      
+      - name: Build macOS App (Universal Binary)
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          wails build -clean -platform darwin/universal
+      
+      - name: List build output
+        run: |
+          echo "Build directory contents:"
+          ls -lah build/bin/
+      
+      - name: Create DMG (optional)
+        run: |
+          brew install create-dmg
+          APP_NAME=$(ls build/bin/*.app | head -n 1 | xargs basename)
+          create-dmg \
+            --volname "OpenPlace Bot" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --app-drop-link 600 185 \
+            "build/bin/OpenPlaceBot.dmg" \
+            "build/bin/$APP_NAME"
+        continue-on-error: true
+      
+      - name: Upload macOS App
+        uses: actions/upload-artifact@v4
+        with:
+          name: openplace-bot-macos
+          path: build/bin/*.app
+          retention-days: 30
+      
+      - name: Upload DMG
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openplace-bot-macos-dmg
+          path: build/bin/*.dmg
+          retention-days: 30
+        continue-on-error: true
