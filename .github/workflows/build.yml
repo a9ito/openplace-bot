@@ -1,0 +1,81 @@
+name: Build Wails App
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  release:
+    types: [ created ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform: [macos-latest, ubuntu-latest, windows-latest]
+    
+    runs-on: ${{ matrix.platform }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      
+      - name: Install frontend dependencies
+        run: npm install
+      
+      - name: Build application (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          wails build -clean -platform darwin/universal
+      
+      - name: Build application (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          wails build -clean
+      
+      - name: Build application (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          wails build -clean
+      
+      - name: Upload artifacts (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v3
+        with:
+          name: openplace-bot-macos
+          path: build/bin/*.app
+      
+      - name: Upload artifacts (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v3
+        with:
+          name: openplace-bot-linux
+          path: build/bin/*
+      
+      - name: Upload artifacts (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v3
+        with:
+          name: openplace-bot-windows
+          path: build/bin/*.exe
+      
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/bin/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
