@@ -66,18 +66,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-output-${{ github.run_id }}.app
-          path: path/to/output
+          path: build/bin/*.app
       
       - name: Upload artifacts (Linux)
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: build-output-${{ github.run_id }}
-          path: path/to/output
+          path: build/bin/*
       
       - name: Upload artifacts (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: build-output-${{ github.run_id }}.exe
-          path: path/to/output
+          path: build/bin/*.exe
