@@ -74,6 +74,7 @@ jobs:
         with:
           name: build-output-${{ github.run_id }}
           path: build/bin/*
+          if-no-files-found: ignore
       
       - name: Upload artifacts (Windows)
         if: runner.os == 'Windows'
